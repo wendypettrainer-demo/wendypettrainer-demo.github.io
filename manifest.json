@@ -1,0 +1,24 @@
+{
+  "name": "Wendy 訓練 (DEMO)",
+  "short_name": "DEMO",
+  "description": "展示版本",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f0e6d6",
+  "theme_color": "#f0e6d6",
+  "orientation": "portrait",
+  "lang": "zh-Hant",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
