@@ -911,7 +911,18 @@ function looksLikeHtml(s) {
 }
 function ensureColorHtml(s) {
   if (!s) return '';
-  return looksLikeHtml(s) ? sanitizeColorHtml(s) : plainTextToHtml(s);
+  if (looksLikeHtml(s)) return sanitizeColorHtml(s);
+  if (/&lt;(br|span|div|p)\b|&amp;lt;(br|span|div|p)\b/i.test(s)) {
+    const ta = document.createElement('textarea');
+    ta.innerHTML = s;
+    let decoded = ta.value;
+    if (/&lt;(br|span|div|p)\b/i.test(decoded)) {
+      ta.innerHTML = decoded;
+      decoded = ta.value;
+    }
+    if (looksLikeHtml(decoded)) return sanitizeColorHtml(decoded);
+  }
+  return plainTextToHtml(s);
 }
 function colorToolbarHtml(idForBind = '') {
   const dataAttr = idForBind ? ` data-tb-for="${idForBind}"` : '';
@@ -930,6 +941,34 @@ function bindColorToolbar(toolbarEl, editorEl) {
       applyColorToSelection(btn.dataset.color, editorEl);
     };
   });
+}
+function insertHtmlAtCursor(editorEl, html) {
+  editorEl.focus();
+  const sel = window.getSelection();
+  let range;
+  if (sel.rangeCount === 0 || !editorEl.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+    range = document.createRange();
+    range.selectNodeContents(editorEl);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } else {
+    range = sel.getRangeAt(0);
+  }
+  range.deleteContents();
+  const tmp = document.createElement('div');
+  tmp.innerHTML = sanitizeColorHtml(html);
+  const nodes = [...tmp.childNodes];
+  let lastNode = null;
+  nodes.forEach(node => {
+    range.insertNode(node);
+    range.setStartAfter(node);
+    range.collapse(true);
+    lastNode = node;
+  });
+  sel.removeAllRanges();
+  sel.addRange(range);
+  editorEl.dispatchEvent(new Event('input', { bubbles: true }));
 }
 function insertTextAtCursor(editorEl, text) {
   editorEl.focus();
@@ -2691,8 +2730,9 @@ function renderFirstConsultSession(sess, pet) {
       if (!tplItem) return;
       const editor = document.getElementById('firstConsultReport');
       const isEmpty = editor.textContent.trim() === '';
-      const text = (isEmpty ? '' : '\n\n') + (tplItem.content || '');
-      insertTextAtCursor(editor, text);
+      const prefix = isEmpty ? '' : '<br><br>';
+      const contentHtml = ensureColorHtml(tplItem.content || '');
+      insertHtmlAtCursor(editor, prefix + contentHtml);
       saveAll();
     };
   });
