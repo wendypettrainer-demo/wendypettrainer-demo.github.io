@@ -167,6 +167,44 @@
   }
   .card-menu-btn:hover { background: rgba(139,111,71,0.12); color: var(--brown-dark); }
 
+  /* Session 狀態 toggle 圓圈（booked/done） */
+  .status-toggle {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    border: 2px solid var(--border, #c9b89a);
+    background: white;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    color: white;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-right: 12px;
+    margin-top: 2px;
+    padding: 0;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .status-toggle.done {
+    background: var(--good, #6b9e6e);
+    border-color: var(--good, #6b9e6e);
+  }
+  .status-toggle.booked:hover { border-color: var(--accent, #8b6f47); }
+  /* done 卡片視覺：灰底 + 標題刪除線 */
+  .card.session-done { background: #f5f0e8; opacity: 0.72; }
+  .card.session-done .card-title { text-decoration: line-through; color: var(--text-soft); }
+  /* Section header（即將上課優先模式 3 段） */
+  .session-section-header {
+    font-size: 14px;
+    color: var(--brown-dark);
+    margin: 18px 4px 8px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+    font-weight: 600;
+  }
+  .session-section-header.pending { color: var(--work, #c97a4f); }
+
   .card-menu {
     background: white;
     border-radius: 10px;
@@ -658,18 +696,18 @@
     .app { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
   }
 
-/* DEMO MODE Banner */
-.demo-mode-banner {
-  background: #ffd966;
-  color: #6b5435;
-  text-align: center;
-  padding: 8px 12px;
-  font-weight: 600;
-  font-size: 13px;
-  border-bottom: 2px solid #c9a85a;
-  letter-spacing: 0.5px;
-}
-.demo-mode-banner b { color: #8b6f47; }
+  /* DEMO MODE Banner */
+  .demo-mode-banner {
+    background: #ffd966;
+    color: #6b5435;
+    text-align: center;
+    padding: 8px 12px;
+    font-weight: 600;
+    font-size: 13px;
+    border-bottom: 2px solid #c9a85a;
+    letter-spacing: 0.5px;
+  }
+  .demo-mode-banner b { color: #8b6f47; }
 </style>
 </head>
 <body>
@@ -849,15 +887,17 @@ function emptyTable(cols = 3, rowCount = 2) {
     rows: Array.from({ length: rowCount }, () => Array.from({ length: cols }, () => '')),
   };
 }
+// 顏色 sanitize：只允許 <br> 跟 <span style="color:..."> 跟 <span style="font-weight:...">
 function sanitizeColorHtml(html) {
   if (!html) return '';
   const tmp = document.createElement('div');
   tmp.innerHTML = html;
+  // 直接移除危險元素
   tmp.querySelectorAll('script, style, iframe, object, embed, link, meta').forEach(el => el.remove());
   function walk(node) {
     [...node.childNodes].forEach(child => {
-      if (child.nodeType === 8) { child.remove(); return; }
-      if (child.nodeType !== 1) return;
+      if (child.nodeType === 8) { child.remove(); return; }   // comment
+      if (child.nodeType !== 1) return;                        // text
       const tag = child.tagName.toLowerCase();
       if (tag === 'br') return;
       if (tag === 'span') {
@@ -869,6 +909,7 @@ function sanitizeColorHtml(html) {
         walk(child);
         return;
       }
+      // div / p → 取出內容、加 <br>，移除 div/p 標籤
       walk(child);
       const parent = child.parentNode;
       if ((tag === 'div' || tag === 'p') && parent) {
@@ -881,6 +922,7 @@ function sanitizeColorHtml(html) {
   walk(tmp);
   return tmp.innerHTML;
 }
+// 套色彩到當前 selection（必須在 editorEl 範圍內）
 function applyColorToSelection(color, editorEl) {
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) { showNotice('請先選取要上色的文字', 'err'); return; }
@@ -895,6 +937,7 @@ function applyColorToSelection(color, editorEl) {
   }
   span.appendChild(fragment);
   range.insertNode(span);
+  // 把游標放到 span 後
   sel.removeAllRanges();
   const newRange = document.createRange();
   newRange.selectNodeContents(span);
@@ -902,20 +945,25 @@ function applyColorToSelection(color, editorEl) {
   sel.addRange(newRange);
   editorEl.dispatchEvent(new Event('input', { bubbles: true }));
 }
+// 純文字 → HTML（用於舊資料遷移：純文字 step 升級成 HTML）
 function plainTextToHtml(s) {
   if (!s) return '';
   return escapeHtml(s).replace(/\n/g, '<br>');
 }
+// 偵測是否已經是 HTML 格式（含 tag）
 function looksLikeHtml(s) {
   return typeof s === 'string' && /<(br|span|div|p)\b/i.test(s);
 }
+// 確保字串為 sanitized HTML（舊資料遷移 + 新資料 sanitize）
 function ensureColorHtml(s) {
   if (!s) return '';
   if (looksLikeHtml(s)) return sanitizeColorHtml(s);
+  // 自動修正：偵測雙重 escape 的 HTML（&lt;br&gt;、&amp;lt;br&amp;gt;）→ 解碼後當 HTML
   if (/&lt;(br|span|div|p)\b|&amp;lt;(br|span|div|p)\b/i.test(s)) {
     const ta = document.createElement('textarea');
     ta.innerHTML = s;
     let decoded = ta.value;
+    // 二次解碼（&amp;lt; → &lt; → <）
     if (/&lt;(br|span|div|p)\b/i.test(decoded)) {
       ta.innerHTML = decoded;
       decoded = ta.value;
@@ -924,6 +972,7 @@ function ensureColorHtml(s) {
   }
   return plainTextToHtml(s);
 }
+// 共用：產生顏色 toolbar HTML
 function colorToolbarHtml(idForBind = '') {
   const dataAttr = idForBind ? ` data-tb-for="${idForBind}"` : '';
   return `<div class="color-toolbar"${dataAttr}>
@@ -933,6 +982,7 @@ function colorToolbarHtml(idForBind = '') {
     <button type="button" class="tb-blue" data-color="#5a7a9e">A 藍</button>
   </div>`;
 }
+// 共用：綁定 toolbar 跟 editor
 function bindColorToolbar(toolbarEl, editorEl) {
   toolbarEl.querySelectorAll('button[data-color]').forEach(btn => {
     btn.onmousedown = (e) => e.preventDefault();
@@ -942,6 +992,7 @@ function bindColorToolbar(toolbarEl, editorEl) {
     };
   });
 }
+// 共用：插入 HTML 到 contenteditable 游標位置（會 sanitize）
 function insertHtmlAtCursor(editorEl, html) {
   editorEl.focus();
   const sel = window.getSelection();
@@ -970,6 +1021,7 @@ function insertHtmlAtCursor(editorEl, html) {
   sel.addRange(range);
   editorEl.dispatchEvent(new Event('input', { bubbles: true }));
 }
+// 共用：插入純文字到 contenteditable 游標位置（\n 自動轉 <br>）
 function insertTextAtCursor(editorEl, text) {
   editorEl.focus();
   const sel = window.getSelection();
@@ -1003,6 +1055,7 @@ function insertTextAtCursor(editorEl, text) {
   sel.addRange(range);
   editorEl.dispatchEvent(new Event('input', { bubbles: true }));
 }
+// 訓練方法表格 → HTML（cell 內容已是 sanitized HTML）
 function methodTableToHtml(table, opts = {}) {
   const t = normalizeTable(table);
   if (!t) return '';
@@ -1017,13 +1070,33 @@ function methodTableToHtml(table, opts = {}) {
     <tbody>${t.rows.map(row => `<tr>${row.map((c, i) => `<td style="${cellStyle}${i===0 ? ' font-weight:600;' : ''}">${ensureColorHtml(c)}</td>`).join('')}</tr>`).join('')}</tbody>
   </table>`;
 }
+/**
+ * Migration: 補既有 session 的新欄位（status / sourceBookingId / sourceIndex）。
+ * 既有 sessions 都是 Wendy 已上完的紀錄 → status default 'done'。
+ * sourceBookingId / sourceIndex 為 null 表示「不是從 booking spawn 出來的殼」。
+ */
+function ensureSessionShape(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr.map(s => {
+    if (!s || typeof s !== 'object') return s;
+    return {
+      ...s,
+      status: (s.status === 'booked' || s.status === 'done') ? s.status : 'done',
+      sourceBookingId: s.sourceBookingId || null,
+      sourceIndex: (typeof s.sourceIndex === 'number') ? s.sourceIndex : null,
+    };
+  });
+}
+
 function ensureItemShape(arr) {
   if (!Array.isArray(arr)) return [];
   return arr.map(it => {
     if (typeof it === 'string') {
+      // v1
       return { name: it, methods: [] };
     }
     if (Array.isArray(it.methods)) {
+      // v3+ → 升級為 v4（加 table 欄位 + steps 統一為 HTML）
       return {
         name: it.name || '',
         methods: it.methods.map(m => ({
@@ -1033,6 +1106,7 @@ function ensureItemShape(arr) {
         })),
       };
     }
+    // v2: had {name, steps}
     if (it.steps && it.steps.trim()) {
       return { name: it.name || '', methods: [{ name: '基本方法', steps: ensureColorHtml(it.steps), table: null }] };
     }
@@ -1099,6 +1173,8 @@ function initStorage() {
   // Migration: 任何舊格式（string[] / {name,steps}）→ v3 {name, methods[]}
   _writeRaw(KEYS.itemsCat, ensureItemShape(load(KEYS.itemsCat, [])));
   _writeRaw(KEYS.itemsDog, ensureItemShape(load(KEYS.itemsDog, [])));
+  // Migration: session 補 status / sourceBookingId / sourceIndex（既有視為 done）
+  _writeRaw(KEYS.sessions, ensureSessionShape(load(KEYS.sessions, [])));
   _writeRaw(KEYS.version, 3);
 }
 
@@ -1111,69 +1187,9 @@ const state = {
   petQuery: '',
 };
 
-/* ============== DEMO: Seed 示範資料 ============== */
-function seedDemoData() {
-  if (!confirm('將清空現有測試資料，填入示範用的假寵物 + 假課堂 + 假預約。\n\n（不影響正式版資料）確定？')) return;
-
-  const now = Date.now();
-  const days = (n) => new Date(now - n * 86400000).toISOString().slice(0,10);
-
-  // 假寵物
-  const pets = [
-    { id: uid(), name: '小白', species: 'dog', breed: '柴犬', gender: 'male', neutered: 'yes',
-      ownerName: '王小明', ownerPhone: '0912-345-678',
-      notes: '怕鞭炮聲、見到陌生人會撲。一歲半。', createdAt: days(60) },
-    { id: uid(), name: 'Lulu', species: 'dog', breed: '標準貴賓', gender: 'female', neutered: 'no',
-      ownerName: '林佳怡', ownerPhone: '0987-654-321',
-      notes: '社會化訓練中、牽繩會暴衝。', createdAt: days(30) },
-    { id: uid(), name: '麻吉', species: 'dog', breed: '米克斯', gender: 'male', neutered: 'yes',
-      ownerName: '陳大華', ownerPhone: '0922-111-222',
-      notes: '收容所領養、看到狗會吠。', createdAt: days(20) },
-    { id: uid(), name: '咪咪', species: 'cat', breed: '英短', gender: 'female', neutered: 'yes',
-      ownerName: '張小婷', ownerPhone: '0933-555-666',
-      notes: '剪指甲訓練、外出籠減敏。', createdAt: days(15) },
-    { id: uid(), name: '黑炭', species: 'cat', breed: '混血',  gender: 'male', neutered: 'no',
-      ownerName: '黃明哲', ownerPhone: '0911-999-888',
-      notes: '進外出籠就掙扎。', createdAt: days(7) },
-  ];
-
-  // 假課堂
-  const sessions = [];
-  const itemsDog = ['坐下 Sit','趴下 Down','過來 Come','跟隨散步 Heel','不暴衝（牽繩禮儀）'];
-  const itemsCat = ['響片連結','進外出籠（Crate）','接受梳毛'];
-  pets.forEach((p, i) => {
-    const list = p.species === 'dog' ? itemsDog : itemsCat;
-    sessions.push({
-      id: uid(), petId: p.id, date: days(20 - i*3),
-      location: i % 2 ? '嘉義市東區' : '高雄市鳳山區', duration: 60,
-      records: list.slice(0,3).map(name => ({ name, rating: ['good','ok','work'][i%3], methods: [], petNote: '' })),
-      homework: '每日練習 10 分鐘，影片回傳給訓練師。',
-      notes: '飼主配合度高、進度穩定。',
-    });
-  });
-
-  // 假預約
-  const bookings = [
-    { id: uid(), petId: pets[0].id, sessionCount: 4, feePerClass: 3000, transportPerClass: 0,
-      sessions: [{ date: days(-3), startTime: '13:40', endTime: '14:40' }, {}, {}, {}],
-      location: '嘉義市大雅路1號', paymentDueDate: days(-5), createdAt: days(7) },
-    { id: uid(), petId: pets[1].id, sessionCount: 6, feePerClass: 2800, transportPerClass: 100,
-      sessions: [{ date: days(-7), startTime: '10:00', endTime: '11:00' },
-                 { date: days(-1), startTime: '10:00', endTime: '11:00' }, {}, {}, {}, {}],
-      location: '高雄市鳳山區', paymentDueDate: days(0), createdAt: days(14) },
-  ];
-
-  save(KEYS.pets, pets);
-  save(KEYS.sessions, sessions);
-  save(KEYS.bookings, bookings);
-
-  showNotice('✅ 已填入示範資料：5 隻寵物 / 5 堂課紀錄 / 2 個預約');
-  setTimeout(() => render(), 500);
-}
-
 /* ============== CLOUD SYNC ============== */
 const SYNC = {
-  GIST_DESCRIPTION: 'Wendy 訓練資料同步 [DEMO]',
+  GIST_DESCRIPTION: 'Wendy 訓練資料同步 v1',
   pushTimer: null,
   pushing: false,
   pulling: false,
@@ -1255,7 +1271,7 @@ function applySyncPayload(remote) {
   if (!remote || typeof remote !== 'object') return false;
   // 用 _writeRaw 避免遞迴 push
   if (Array.isArray(remote.pets)) _writeRaw(KEYS.pets, remote.pets);
-  if (Array.isArray(remote.sessions)) _writeRaw(KEYS.sessions, remote.sessions);
+  if (Array.isArray(remote.sessions)) _writeRaw(KEYS.sessions, ensureSessionShape(remote.sessions));
   if (Array.isArray(remote.itemsCat)) _writeRaw(KEYS.itemsCat, remote.itemsCat);
   if (Array.isArray(remote.itemsDog)) _writeRaw(KEYS.itemsDog, remote.itemsDog);
   if (Array.isArray(remote.bookings)) _writeRaw(KEYS.bookings, remote.bookings);
@@ -1808,6 +1824,8 @@ function applySessionSort(sessions, key) {
     case 'date_asc':
       return arr.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
     case 'upcoming_first':
+      // 注意：'upcoming_first' 在 renderSessions 走 3 段 partition path，不會進這裡。
+      // 保留這 case 以防其他 caller 直接 call applySessionSort。
       return arr.sort((a, b) => {
         const aFut = (a.date || '') >= today;
         const bFut = (b.date || '') >= today;
@@ -1827,6 +1845,47 @@ function applySessionSort(sessions, key) {
     default:
       return arr.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }
+}
+
+/**
+ * 'upcoming_first' 模式專用：把 sessions 切成 3 段。
+ * - upcoming：booked + (date >= today 或 date 空白「待安排」)
+ * - pending： booked + date < today（待結案，呆帳訊號）
+ * - done：    status === 'done'
+ * 各段內部排序見內文。
+ */
+function partitionSessions(sessions) {
+  const today = todayStr();
+  const upcoming = [], pending = [], done = [];
+  for (const s of sessions) {
+    if (s.status === 'done') done.push(s);
+    else if (!s.date || s.date >= today) upcoming.push(s);
+    else pending.push(s);
+  }
+  // upcoming：日期近 → 遠；待安排（date 空）排該段最後
+  upcoming.sort((a, b) => {
+    if (!a.date && b.date) return 1;
+    if (a.date && !b.date) return -1;
+    if (!a.date && !b.date) return 0;
+    return a.date.localeCompare(b.date);
+  });
+  // pending：最久過期 → 最近過期（最該追的呆帳浮上來）
+  pending.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  // done：日期新 → 舊（最近上的最前）
+  done.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  return { upcoming, pending, done };
+}
+
+/**
+ * 翻轉 session.status booked ↔ done。回傳更新後的 session（caller 自己 re-render）。
+ */
+function toggleSessionStatus(sessionId) {
+  const all = load(KEYS.sessions, []);
+  const idx = all.findIndex(s => s.id === sessionId);
+  if (idx < 0) return null;
+  all[idx].status = all[idx].status === 'done' ? 'booked' : 'done';
+  save(KEYS.sessions, all);
+  return all[idx];
 }
 
 function renderSessions() {
@@ -1860,24 +1919,40 @@ function renderSessions() {
       </select>
     </div>`;
 
+  // 卡片渲染（共用）
   function sessionCardHtml(s) {
     const recCount = (s.records || []).filter(r => r.selected).length;
     const isToday = s.date === todayStr();
+    const isDone = s.status === 'done';
     const ctLab = courseTypeLabel(s);
     const seqLab = sessionSeqLabel(s);
     const courseLine = (ctLab || seqLab)
       ? `<div class="card-meta" style="color:var(--brown-dark); font-weight:500">📋 ${escapeHtml(ctLab)}${ctLab && seqLab ? ' · ' : ''}${escapeHtml(seqLab)}</div>`
       : '';
+    // 標題：有 date 顯示日期；date 空顯示「第 N 堂（待安排）」灰字
+    let titleHtml;
+    if (s.date) {
+      titleHtml = `${fmtDate(s.date)} ${isToday ? '<span class="badge" style="background:var(--good)">今天</span>' : ''}`;
+    } else {
+      const seq = (s.sessionSeq || '?').toString();
+      titleHtml = `<span style="color:var(--text-soft); font-weight:500">第 ${escapeHtml(seq)} 堂（待安排）</span>`;
+    }
+    const toggleBtn = `<button class="status-toggle ${isDone ? 'done' : 'booked'}" data-toggle="${s.id}" title="${isDone ? '取消完成' : '標記已完成'}">${isDone ? '✓' : ''}</button>`;
+    const cardCls = isDone ? 'card session-done' : 'card';
+    const metaTail = recCount > 0
+      ? ' · 已記錄 ' + recCount + ' 項'
+      : (isDone ? ' · 已完成' : (s.date ? ' · 尚未記錄' : ' · 待填日期'));
     return `
-      <div class="card" data-id="${s.id}">
+      <div class="${cardCls}" data-id="${s.id}">
         <div class="card-row">
-          <div>
-            <div class="card-title">${fmtDate(s.date)} ${isToday ? '<span class="badge" style="background:var(--good)">今天</span>' : ''}</div>
+          ${toggleBtn}
+          <div style="flex:1; min-width:0">
+            <div class="card-title">${titleHtml}</div>
             ${courseLine}
             <div class="card-meta">
               ${s.location ? '📍 ' + escapeHtml(s.location) + ' · ' : ''}
               ${s.duration ? s.duration + ' 分鐘' : ''}
-              ${recCount > 0 ? ' · 已記錄 ' + recCount + ' 項' : ' · 尚未記錄'}
+              ${metaTail}
             </div>
           </div>
           <button class="card-menu-btn" data-menu="${s.id}" title="更多動作">⋯</button>
@@ -1888,7 +1963,18 @@ function renderSessions() {
   let body;
   if (sessions.length === 0) {
     body = `<div class="empty"><h3>還沒有課程</h3><p>點右下角 ＋ 新增第一堂</p></div>`;
+  } else if (sortKey === 'upcoming_first') {
+    // 3 段顯示：即將上課 / 待結案 / 已完成
+    const parts = partitionSessions(sessions);
+    const sectionHtml = (label, list, cls) => list.length === 0 ? '' : `
+      <h3 class="session-section-header${cls ? ' ' + cls : ''}">${label} <span style="color:var(--text-soft); font-weight:400">(${list.length})</span></h3>
+      ${list.map(sessionCardHtml).join('')}
+    `;
+    body = sectionHtml('📅 即將上課', parts.upcoming, '')
+         + sectionHtml('⚠ 待結案', parts.pending, 'pending')
+         + sectionHtml('✓ 已完成', parts.done, '');
   } else if (sortKey === 'by_type') {
+    // 課程類型分組：加分類標頭
     const groups = {};
     sessions.forEach(s => {
       const lab = courseTypeLabel(s) || '未分類';
@@ -1896,15 +1982,14 @@ function renderSessions() {
       groups[lab].push(s);
     });
     body = Object.keys(groups).sort().map(label => `
-      <h3 style="font-size:14px; color:var(--brown-dark); margin:18px 4px 8px; border-bottom:1px solid var(--border); padding-bottom:4px">
-        📋 ${escapeHtml(label)} <span style="color:var(--text-soft); font-weight:400">(${groups[label].length})</span>
-      </h3>
+      <h3 class="session-section-header">📋 ${escapeHtml(label)} <span style="color:var(--text-soft); font-weight:400">(${groups[label].length})</span></h3>
       ${groups[label].map(sessionCardHtml).join('')}
     `).join('');
   } else {
     body = sessions.map(sessionCardHtml).join('');
   }
   main.innerHTML = meta + sortBar + body + `<button class="fab" id="fab">＋</button>`;
+  // 排序選單
   const sortSelect = document.getElementById('sessionSort');
   if (sortSelect) sortSelect.onchange = (e) => {
     setSessionSortPref(e.target.value);
@@ -1914,8 +1999,9 @@ function renderSessions() {
   document.getElementById('bookingBtn').onclick = () => go('bookings', { petId: pet.id });
   main.querySelectorAll('.card[data-id]').forEach(el => {
     el.onclick = (e) => {
-      // 點到 ⋯ 按鈕時不要進入該堂課
-      if (e.target.classList.contains('card-menu-btn')) return;
+      // 點到 ⋯ 按鈕、toggle 按鈕時不要進入該堂課
+      if (e.target.closest('.card-menu-btn')) return;
+      if (e.target.closest('.status-toggle')) return;
       go('session', { sessionId: el.dataset.id });
     };
   });
@@ -1927,6 +2013,14 @@ function renderSessions() {
       const sess = getSession(sid);
       if (!sess) return;
       openSessionMenu(btn, sess);
+    };
+  });
+  // 狀態 toggle 圓圈：booked ↔ done
+  main.querySelectorAll('.status-toggle[data-toggle]').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      toggleSessionStatus(btn.dataset.toggle);
+      renderSessions();
     };
   });
   document.getElementById('fab').onclick = () => openSessionForm();
@@ -2064,8 +2158,9 @@ function openSessionForm(session = null) {
     overlay.querySelector('#f_groupSubField').style.display = (cur === 'group') ? 'block' : 'none';
     overlay.querySelector('#f_courseTypeOther').style.display = (cur === 'other') ? 'block' : 'none';
     overlay.querySelector('#f_seqField').style.display = (cur && cur !== 'firstConsult') ? 'block' : 'none';
-    const gstSel2 = overlay.querySelector('#f_groupSubType');
-    const gstVal = gstSel2 ? gstSel2.value : '';
+    // 團體班 → 子類「其他」才顯示自填
+    const gstSel = overlay.querySelector('#f_groupSubType');
+    const gstVal = gstSel ? gstSel.value : '';
     overlay.querySelector('#f_groupSubTypeOther').style.display =
       (cur === 'group' && gstVal === 'other') ? 'block' : 'none';
   }
@@ -2105,6 +2200,11 @@ function openSessionForm(session = null) {
       notes: data.notes || '',
       gistId: data.gistId,
       createdAt: data.createdAt || new Date().toISOString(),
+      // booked/done 狀態：edit 保留既有；新建（手動建）default 'done'（記過去的紀錄是主要場景）
+      status: (data.status === 'booked' || data.status === 'done') ? data.status : 'done',
+      // booking 來源（手動建為 null；從 booking spawn 出來的會帶 booking id + 第幾堂）
+      sourceBookingId: data.sourceBookingId || null,
+      sourceIndex: (typeof data.sourceIndex === 'number') ? data.sourceIndex : null,
     };
     const sessions = load(KEYS.sessions, []);
     if (isEdit) {
@@ -2182,6 +2282,170 @@ function bookingDiscount(booking) {
 function bookingTotal(booking) {
   return bookingSubtotal(booking) - bookingDiscount(booking);
 }
+
+/* ============== BOOKING ⇄ SESSION 殼 SYNC ============== */
+/**
+ * 判斷一個 session 殼是不是「空殼」— 沒有任何訓練紀錄、沒有 done 狀態。
+ * 空殼可以被自動刪除；非空殼縮減 booking 時要擋住、刪 booking 時要擋住。
+ */
+function isEmptyShell(s) {
+  if (!s) return true;
+  return (!Array.isArray(s.records) || s.records.length === 0)
+      && !s.homework
+      && !s.notes
+      && !s.firstConsultReport
+      && !s.fasNotes
+      && s.status === 'booked';
+}
+
+/**
+ * Dry-run：給定一份 booking，計算需要 spawn / 刪除的殼。
+ * 回傳 { ok, error?, toAdd: [sourceIndex], toRemove: [sessionId] }。
+ * 規則（採用 Steven「booking 是合約 snapshot」原則）：
+ * - 沒對應殼的 sourceIndex → spawn 新殼
+ * - 已有殼的 sourceIndex → 不更新（殼是排程 source of truth，改期改在殼上）
+ * - 超出新 sessionCount 的殼：空殼可刪、非空殼擋住整次 save
+ */
+function planBookingShellSync(booking) {
+  const all = load(KEYS.sessions, []);
+  const existing = all.filter(s => s.sourceBookingId === booking.id);
+  const sessionCount = booking.sessionCount || 0;
+  const toAdd = [];
+  for (let i = 0; i < sessionCount; i++) {
+    if (!existing.find(s => s.sourceIndex === i)) toAdd.push(i);
+  }
+  const toRemove = [];
+  const blockers = [];
+  for (const s of existing) {
+    if (s.sourceIndex == null) continue;
+    if (s.sourceIndex >= sessionCount) {
+      if (isEmptyShell(s)) toRemove.push(s.id);
+      else blockers.push(s.sourceIndex + 1);
+    }
+  }
+  if (blockers.length > 0) {
+    return {
+      ok: false,
+      error: `第 ${blockers.join('、')} 堂已有紀錄或被標記已完成，無法縮減堂數`,
+    };
+  }
+  return { ok: true, toAdd, toRemove };
+}
+
+/**
+ * 套用 plan：實際把殼新增 / 刪除進 KEYS.sessions。回傳 {spawned, removed}。
+ */
+function applyBookingShellSync(booking, plan) {
+  let arr = load(KEYS.sessions, []);
+  if (plan.toRemove.length > 0) {
+    arr = arr.filter(s => !plan.toRemove.includes(s.id));
+  }
+  for (const i of plan.toAdd) {
+    const bs = (booking.sessions && booking.sessions[i]) || {};
+    arr.push({
+      id: uid(),
+      petId: booking.petId,
+      date: bs.date || '',
+      duration: 0,
+      location: booking.location || '',
+      courseType: booking.courseType || '',
+      groupSubType: booking.groupSubType || '',
+      groupSubTypeOther: booking.groupSubTypeOther || '',
+      courseTypeOther: booking.courseTypeOther || '',
+      sessionSeq: String(i + 1),
+      sessionTotal: String(booking.sessionCount || 0),
+      records: [],
+      homework: '',
+      notes: '',
+      gistId: undefined,
+      createdAt: new Date().toISOString(),
+      status: 'booked',
+      sourceBookingId: booking.id,
+      sourceIndex: i,
+    });
+  }
+  save(KEYS.sessions, arr);
+  return { spawned: plan.toAdd.length, removed: plan.toRemove.length };
+}
+
+/**
+ * 認親 + 補殼工具（migration / 一次性修復）。
+ * 對每份 booking 的每個 sourceIndex：
+ *   1. 已有殼 → 跳過
+ *   2. 沒殼但有日期 → 找同 petId + 同 date 且未連結的既有 session，補上 sourceBookingId/sourceIndex
+ *   3. 還是找不到 → spawn 新空殼
+ * 回傳 { newSessions, linked, spawned }。caller 自行決定是否寫入。
+ */
+function linkLegacyBookingsToSessions() {
+  const bookings = load(KEYS.bookings, []);
+  const sessions = load(KEYS.sessions, []);
+  const newSessions = sessions.slice();
+  let linked = 0, spawned = 0;
+  for (const b of bookings) {
+    const sessionCount = b.sessionCount || 0;
+    for (let i = 0; i < sessionCount; i++) {
+      const bs = (b.sessions && b.sessions[i]) || {};
+      // 該 sourceIndex 已有殼？跳過
+      if (newSessions.find(s => s.sourceBookingId === b.id && s.sourceIndex === i)) continue;
+      // 找日期 + 寵物 match 的既有 session（未被連結到任何 booking）
+      let matched = null;
+      if (bs.date) {
+        matched = newSessions.find(s =>
+          s.petId === b.petId && s.date === bs.date && !s.sourceBookingId
+        );
+      }
+      if (matched) {
+        matched.sourceBookingId = b.id;
+        matched.sourceIndex = i;
+        linked++;
+      } else {
+        newSessions.push({
+          id: uid(),
+          petId: b.petId,
+          date: bs.date || '',
+          duration: 0,
+          location: b.location || '',
+          courseType: b.courseType || '',
+          groupSubType: b.groupSubType || '',
+          groupSubTypeOther: b.groupSubTypeOther || '',
+          courseTypeOther: b.courseTypeOther || '',
+          sessionSeq: String(i + 1),
+          sessionTotal: String(sessionCount),
+          records: [],
+          homework: '',
+          notes: '',
+          gistId: undefined,
+          createdAt: new Date().toISOString(),
+          status: 'booked',
+          sourceBookingId: b.id,
+          sourceIndex: i,
+        });
+        spawned++;
+      }
+    }
+  }
+  return { newSessions, linked, spawned };
+}
+
+/**
+ * 刪除 booking 時連帶處理殼：空殼直接刪、有紀錄則 throw（block 整次 booking 刪除）。
+ * 回傳 { ok, error?, removed }。
+ */
+function cleanupBookingShells(bookingId) {
+  const all = load(KEYS.sessions, []);
+  const shells = all.filter(s => s.sourceBookingId === bookingId);
+  const blockers = shells.filter(s => !isEmptyShell(s));
+  if (blockers.length > 0) {
+    return {
+      ok: false,
+      error: `匯款通知對應的第 ${blockers.map(s => s.sourceIndex + 1).join('、')} 堂已有紀錄或已完成，請先處理那幾堂再刪`,
+    };
+  }
+  const filtered = all.filter(s => s.sourceBookingId !== bookingId);
+  save(KEYS.sessions, filtered);
+  return { ok: true, removed: shells.length };
+}
+
 // 24h "16:00" → 「下午4:00」；空字串維持空
 function fmtTime12(hhmm) {
   if (!hhmm) return '';
@@ -2294,8 +2558,15 @@ function openBookingMenu(anchorBtn, bookingId) {
   menu.querySelector('[data-act="delete"]').onclick = () => {
     menu.remove();
     if (!confirm('刪除這筆匯款通知？')) return;
+    const cleanup = cleanupBookingShells(bookingId);
+    if (!cleanup.ok) {
+      showNotice(cleanup.error, 'err');
+      return;
+    }
     save(KEYS.bookings, load(KEYS.bookings, []).filter(b => b.id !== bookingId));
-    showNotice('已刪除');
+    let msg = '已刪除';
+    if (cleanup.removed > 0) msg += ` · 連帶移除 ${cleanup.removed} 顆空殼`;
+    showNotice(msg);
     render();
   };
 }
@@ -2480,6 +2751,7 @@ function renderBooking() {
     main.querySelectorAll('input[name="bkCourseType"]').forEach(r => {
       r.onchange = () => {
         b.courseType = r.value;
+        // 切到 group 而 groupSubType 是空字串時，預設選 puppy
         if (b.courseType === 'group' && !b.groupSubType) b.groupSubType = 'puppy';
         rerender();
       };
@@ -2563,8 +2835,15 @@ function renderBooking() {
     if (isEdit) {
       document.getElementById('bk_del').onclick = () => {
         if (!confirm('刪除這筆匯款通知？')) return;
+        const cleanup = cleanupBookingShells(b.id);
+        if (!cleanup.ok) {
+          showNotice(cleanup.error, 'err');
+          return;
+        }
         save(KEYS.bookings, load(KEYS.bookings, []).filter(x => x.id !== b.id));
-        showNotice('已刪除');
+        let msg = '已刪除';
+        if (cleanup.removed > 0) msg += ` · 連帶移除 ${cleanup.removed} 顆空殼`;
+        showNotice(msg);
         go('bookings', { petId: pet.id });
       };
     }
@@ -2582,11 +2861,21 @@ function renderBooking() {
       createdAt: b.createdAt || now,
       updatedAt: now,
     });
+    // 先 dry-run 殼同步，能過再真的存 booking（避免 booking 跟殼 desync）
+    const plan = planBookingShellSync(updated);
+    if (!plan.ok) {
+      showNotice(plan.error, 'err');
+      return;
+    }
     const all = load(KEYS.bookings, []);
     const idx = all.findIndex(x => x.id === updated.id);
     if (idx >= 0) all[idx] = updated; else all.push(updated);
     save(KEYS.bookings, all);
-    showNotice('已儲存');
+    const sync = applyBookingShellSync(updated, plan);
+    let msg = '已儲存';
+    if (sync.spawned > 0) msg += ` · 新增 ${sync.spawned} 堂預約`;
+    if (sync.removed > 0) msg += ` · 移除 ${sync.removed} 顆空殼`;
+    showNotice(msg);
     if (thenPdf) {
       exportBookingPdf(updated, pet);
     } else if (!isEdit) {
@@ -2693,11 +2982,18 @@ function renderFirstConsultSession(sess, pet) {
     </div>
 
     <div class="actions-row">
+      ${sess.status === 'done'
+        ? `<button class="btn ghost" id="toggleStatusBtn" style="border-color:var(--text-soft); color:var(--text-soft)">↺ 取消完成</button>`
+        : `<button class="btn" id="toggleStatusBtn" style="background:var(--good); color:white">✓ 標記已完成</button>`}
       <button class="btn" id="saveBtn">💾 儲存</button>
       <button class="btn ghost" id="pdfBtn">📄 報告 PDF</button>
     </div>
   `;
   document.getElementById('editSess').onclick = () => openSessionForm(sess);
+  document.getElementById('toggleStatusBtn').onclick = () => {
+    toggleSessionStatus(sess.id);
+    renderSession();
+  };
 
   function saveAll() {
     const fasEl = document.getElementById('fasNotes');
@@ -2709,9 +3005,11 @@ function renderFirstConsultSession(sess, pet) {
     if (idx >= 0) { sessions[idx] = sess; save(KEYS.sessions, sessions); }
   }
 
+  // 顏色 toolbar 綁定
   bindColorToolbar(main.querySelector('[data-tb-for="fasNotes"]'), document.getElementById('fasNotes'));
   bindColorToolbar(main.querySelector('[data-tb-for="firstConsultReport"]'), document.getElementById('firstConsultReport'));
 
+  // FAS 色帶按鈕：插入「🔴 高度 」這種標記
   main.querySelectorAll('.fas-btn').forEach(btn => {
     btn.onclick = () => {
       const lv = btn.dataset.fas;
@@ -2723,6 +3021,7 @@ function renderFirstConsultSession(sess, pet) {
     };
   });
 
+  // 模板插入按鈕（content 已是 HTML，用 insertHtmlAtCursor）
   main.querySelectorAll('[data-tpl-idx]').forEach(btn => {
     btn.onclick = () => {
       const i = parseInt(btn.dataset.tplIdx, 10);
@@ -2737,6 +3036,7 @@ function renderFirstConsultSession(sess, pet) {
     };
   });
 
+  // Auto-save on blur
   ['fasNotes', 'firstConsultReport'].forEach(id => {
     document.getElementById(id).addEventListener('blur', saveAll);
   });
@@ -2754,12 +3054,14 @@ function renderSession() {
   if (!sess) { go('sessions', { petId: state.petId }); return; }
   const pet = getPet(sess.petId);
   if (!pet) { go('pets'); return; }
+  // 首堂諮詢走專用 view
   if (sess.courseType === 'firstConsult') {
     return renderFirstConsultSession(sess, pet);
   }
   const items = ensureItemShape(pet.species === 'cat' ? load(KEYS.itemsCat, []) : load(KEYS.itemsDog, []));
   const recordsByName = {};
   (sess.records || []).forEach(r => recordsByName[r.name] = r);
+  // 排序：勾選的在上（按 selectedAt 時間戳），未勾選的在下（按訓練項目原順序）
   const itemOrderIdx = {};
   items.forEach((it, i) => { itemOrderIdx[it.name] = i; });
   const sortedItems = items.slice().sort((a, b) => {
@@ -2771,6 +3073,7 @@ function renderSession() {
     if (aSel && bSel) {
       const at = ra.selectedAt || 0, bt = rb.selectedAt || 0;
       if (at && bt && at !== bt) return at - bt;
+      // 都沒 selectedAt 或時間相同 → 原順序
       return itemOrderIdx[a.name] - itemOrderIdx[b.name];
     }
     return itemOrderIdx[a.name] - itemOrderIdx[b.name];
@@ -2864,6 +3167,9 @@ function renderSession() {
     </div>
 
     <div class="actions-row">
+      ${sess.status === 'done'
+        ? `<button class="btn ghost" id="toggleStatusBtn" style="border-color:var(--text-soft); color:var(--text-soft)">↺ 取消完成</button>`
+        : `<button class="btn" id="toggleStatusBtn" style="background:var(--good); color:white">✓ 標記已完成</button>`}
       <button class="btn" id="saveBtn">💾 儲存</button>
       <button class="btn ghost" id="pdfBtn">📄 下載 PDF</button>
       <button class="btn ghost" id="shareBtn">🔗 產生分享連結</button>
@@ -2871,6 +3177,10 @@ function renderSession() {
   `;
 
   document.getElementById('editSess').onclick = () => openSessionForm(sess);
+  document.getElementById('toggleStatusBtn').onclick = () => {
+    toggleSessionStatus(sess.id);
+    renderSession();
+  };
 
   // Item interaction
   main.querySelectorAll('.item').forEach(el => {
@@ -2880,7 +3190,7 @@ function renderSession() {
       const wasSelected = cur.selected;
       cur.selected = !cur.selected;
       if (cur.selected && !wasSelected) {
-        cur.selectedAt = Date.now();
+        cur.selectedAt = Date.now();  // 記錄勾選時間（用於排序）
       }
       if (!cur.selected) { cur.rating = ''; cur.petNote = ''; cur.selectedAt = null; }
       recordsByName[name] = cur;
@@ -2945,9 +3255,11 @@ function renderSession() {
     await shareToGist(sess, pet);
   };
 
+  // Auto-save homework / notes on blur
   ['homework','trainerNotes'].forEach(id => {
     document.getElementById(id).addEventListener('blur', saveRecords);
   });
+  // 顏色 toolbar 綁定 (homework + trainerNotes)
   ['homework','trainerNotes'].forEach(id => {
     const tb = main.querySelector(`[data-tb-for="${id}"]`);
     const ed = document.getElementById(id);
@@ -3083,6 +3395,7 @@ function exportPdf(sess, pet) {
     pet.birth,
   ].filter(Boolean).join(' · ');
 
+  // 排序：勾選順序（selectedAt asc），無 selectedAt 則 fallback 訓練項目原順序
   const itemOrder = items.map(it => it.name);
   const records = (sess.records || []).filter(r => r.selected).slice().sort((a, b) => {
     if (a.selectedAt && b.selectedAt) return a.selectedAt - b.selectedAt;
@@ -3673,6 +3986,7 @@ async function shareToGist(sess, pet) {
   const items = ensureItemShape(pet.species === 'cat' ? load(KEYS.itemsCat, []) : load(KEYS.itemsDog, []));
   const itemMap = {};
   items.forEach(it => { itemMap[it.name] = it.methods || []; });
+  // 排序：勾選順序（selectedAt asc），無 selectedAt 則 fallback 訓練項目原順序
   const itemOrder = items.map(it => it.name);
   const enrichedRecords = (sess.records || []).slice().sort((a, b) => {
     if (a.selectedAt && b.selectedAt) return a.selectedAt - b.selectedAt;
@@ -3941,14 +4255,6 @@ function renderSettings() {
     <div id="itemEditor"></div>
 
     <h3 style="color:var(--brown-dark); margin: 24px 0 10px; font-size:15px">資料管理</h3>
-    <div class="card" style="background:#fff4ea; border:1.5px dashed #c9a85a; cursor:default; margin-bottom:14px">
-      <p style="font-weight:600; color:#8b6f47; margin-bottom:8px">🎬 展示版專屬</p>
-      <p class="card-meta" style="margin-bottom:10px">
-        一鍵清空現有資料，填入 5 隻範例寵物、課堂紀錄、預約。給訓練師朋友 demo 或自己玩玩用。
-      </p>
-      <button class="btn" id="seedDemoBtn" style="background:#c9a85a">填入示範資料</button>
-    </div>
-
     <div class="card" style="cursor:default">
       <div class="actions-row">
         <button class="btn ghost" id="exportData">匯出全部資料 (JSON)</button>
@@ -3958,6 +4264,17 @@ function renderSettings() {
       <p class="card-meta" style="margin-top:10px">
         💡 <b>新增寵物</b>（手動 / Email 貼上 / CSV 匯入）已搬到「寵物列表」右下角的 ＋ 按鈕。<br>
         匯出 JSON 是備份用，匯入 JSON 會覆蓋現有資料。重設清單只會還原訓練項目，寵物與課程不受影響。
+      </p>
+    </div>
+
+    <h3 style="color:var(--brown-dark); margin: 24px 0 10px; font-size:15px">資料修復</h3>
+    <div class="card" style="cursor:default">
+      <div class="actions-row">
+        <button class="btn ghost" id="linkOldData">🔗 連結舊匯款通知 / 補產殼</button>
+      </div>
+      <p class="card-meta" style="margin-top:10px">
+        💡 把舊匯款通知跟既有課程紀錄認親（用<b>同寵物 + 同日期</b> match 沒被連結過的紀錄），找不到 match 的會補產空白課程殼。<br>
+        正常情況新建匯款已自動產殼，這個按鈕只在你舊資料還沒連結時用。可以重複按、不會重複產生。
       </p>
     </div>
   `;
@@ -4046,7 +4363,9 @@ function renderSettings() {
     });
     wrap.querySelectorAll('[data-fc-content]').forEach(el => {
       el.onblur = () => { fcTpls[parseInt(el.dataset.fcContent,10)].content = sanitizeColorHtml(el.innerHTML); };
+      // 即時更新（非 sanitized，儲存時再 sanitize）
       el.oninput = () => { fcTpls[parseInt(el.dataset.fcContent,10)].content = el.innerHTML; };
+      // 綁定 toolbar
       const tb = wrap.querySelector(`[data-tb-for="${el.dataset.tbId}"]`);
       if (tb) bindColorToolbar(tb, el);
     });
@@ -4065,6 +4384,7 @@ function renderSettings() {
   };
   document.getElementById('fc_save').onclick = () => {
     const cur = loadBookingTemplate();
+    // 儲存前 sanitize 每個 content
     const cleaned = fcTpls.map(t => ({
       label: (t.label || '').trim(),
       content: sanitizeColorHtml(t.content || ''),
@@ -4193,6 +4513,7 @@ function renderSettings() {
     document.querySelectorAll('#itemEditor input[data-mfield]').forEach(inp => {
       inp.onchange = () => updateMethodField(parseInt(inp.dataset.i), parseInt(inp.dataset.j), inp.dataset.mfield, inp.value);
     });
+    // Steps contenteditable: 儲存 sanitized HTML on blur
     document.querySelectorAll('#itemEditor .color-editor[data-mfield="steps"]').forEach(div => {
       div.onblur = () => {
         const i = parseInt(div.dataset.i), j = parseInt(div.dataset.j);
@@ -4201,7 +4522,9 @@ function renderSettings() {
         save(key, cur);
       };
     });
+    // Toolbar 按鈕：套色到 selection（mousedown.preventDefault 防止失焦）
     document.querySelectorAll('#itemEditor .color-toolbar[data-mtb]').forEach(tb => {
+      const [i, j] = tb.dataset.mtb.split('_').map(Number);
       const editor = tb.parentElement.querySelector('.color-editor[data-mfield="steps"]');
       tb.querySelectorAll('button[data-color]').forEach(btn => {
         btn.onmousedown = (e) => e.preventDefault();
@@ -4239,6 +4562,7 @@ function renderSettings() {
         renderItemEditor();
       };
     });
+    // 表格編輯器
     document.querySelectorAll('[data-mtable]').forEach(btn => {
       btn.onclick = () => {
         const [i, j] = btn.dataset.mtable.split('_').map(Number);
@@ -4291,6 +4615,21 @@ function renderSettings() {
 
   // Data management（CSV / Email 匯入入口已搬到寵物列表 ＋ 按鈕，這裡不再綁定）
 
+  // 資料修復：連結舊 booking 到既有 sessions + 補產殼
+  const linkOldBtn = document.getElementById('linkOldData');
+  if (linkOldBtn) linkOldBtn.onclick = () => {
+    const result = linkLegacyBookingsToSessions();
+    if (result.linked === 0 && result.spawned === 0) {
+      showNotice('沒有要連結 / 補產的項目（舊資料已 OK）');
+      return;
+    }
+    const msg = `掃描完成：\n• 連結 ${result.linked} 筆既有紀錄到匯款通知\n• 補產 ${result.spawned} 顆空殼\n\n繼續？`;
+    if (!confirm(msg)) return;
+    save(KEYS.sessions, result.newSessions);
+    showNotice(`已連結 ${result.linked} 筆 · 補產 ${result.spawned} 顆`);
+    renderSettings();
+  };
+
   document.getElementById('exportData').onclick = () => {
     const dump = {
       version: 2,
@@ -4306,7 +4645,7 @@ function renderSettings() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `petcaredemo-backup-${todayStr()}.json`;
+    a.download = `petcare-backup-${todayStr()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -4340,9 +4679,6 @@ function renderSettings() {
     save(KEYS.itemsCat, DEFAULT_CAT_ITEMS);
     render();
   };
-  // DEMO: Seed 示範資料按鈕
-  const seedBtn = document.getElementById('seedDemoBtn');
-  if (seedBtn) seedBtn.onclick = seedDemoData;
 }
 
 /* ============== EMAIL 單筆匯入 (SurveyCake / Google 表單通知信) ============== */
@@ -4837,9 +5173,12 @@ function openModal(html) {
   document.body.appendChild(overlay);
   return overlay;
 }
+// 訓練方法表格編輯器
 function openTableEditor(initialTable, onSave) {
   let t = normalizeTable(initialTable) || emptyTable(3, 3);
-  let activeCell = null;
+  let activeCell = null;  // 最後 focus 的 cell（toolbar 用）
+
+  // 同步 DOM cell 內容回 t.headers / t.rows（在重 render 前呼叫）
   function syncFromDom() {
     overlay.querySelectorAll('[data-tehdr]').forEach(el => {
       t.headers[parseInt(el.dataset.tehdr)] = sanitizeColorHtml(el.innerHTML);
@@ -4849,6 +5188,7 @@ function openTableEditor(initialTable, onSave) {
       t.rows[ri][ci] = sanitizeColorHtml(el.innerHTML);
     });
   }
+
   function render() {
     const colWidth = `minmax(80px, 1fr)`;
     const gridCols = `40px ${Array.from({length: t.headers.length}, () => colWidth).join(' ')} 40px`;
@@ -4876,6 +5216,7 @@ function openTableEditor(initialTable, onSave) {
         `).join('')}
       </div>
     `;
+    // Track active cell for toolbar
     overlay.querySelectorAll('.color-editor').forEach(el => {
       el.onfocus = () => { activeCell = el; };
     });
@@ -4896,6 +5237,7 @@ function openTableEditor(initialTable, onSave) {
       render();
     };
   }
+
   const overlay = openModal(`
     <div class="modal" style="max-width:900px; width:95vw;">
       <h2>訓練方法表格編輯</h2>
@@ -4921,7 +5263,9 @@ function openTableEditor(initialTable, onSave) {
       </div>
     </div>
   `);
+
   render();
+  // Bind toolbar
   overlay.querySelectorAll('#te_toolbar button[data-color]').forEach(btn => {
     btn.onmousedown = (e) => e.preventDefault();
     btn.onclick = (e) => {
@@ -4930,6 +5274,7 @@ function openTableEditor(initialTable, onSave) {
       applyColorToSelection(btn.dataset.color, activeCell);
     };
   });
+
   overlay.querySelector('#te_addrow').onclick = () => {
     syncFromDom();
     t.rows.push(Array.from({length: t.headers.length}, () => ''));
