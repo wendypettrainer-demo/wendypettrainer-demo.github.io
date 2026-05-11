@@ -884,10 +884,11 @@ body { padding-top: 36px !important; }
   </div>
 
   <div class="actions" style="margin-top:8px;">
-    <button type="button" onclick="syncToGist()" style="flex:1;">🔗 上傳客戶連結</button>
+    <button type="button" onclick="syncToGist()" style="flex:1;">📤 同步給家長</button>
   </div>
+  <div id="unsyncedHint" style="text-align:center; font-size:12px; margin-top:6px; display:none; font-weight:500;"></div>
 
-  <div id="saveStatus" style="text-align:center; font-size:11px; color:var(--muted); margin-top:10px;">系統會自動存檔，無需手動操作</div>
+  <div id="saveStatus" style="text-align:center; font-size:11px; color:var(--muted); margin-top:10px;">表單會自動存檔。按「📤 同步給家長」才會推送到家長頁</div>
 </div>
 
 <!-- 寵物管理彈窗 -->
@@ -1177,9 +1178,11 @@ function resetForm(){
   clearFormFields();
   renderDateHistory();
   toast('已清空當日');
-  // 同步到雲端（讓客戶看到這天也被移除）
-  if(_autoSyncTimer) clearTimeout(_autoSyncTimer);
-  autoSyncToGist();
+  // 標記未同步（手動推送設計：老師按「📤 同步給家長」才推到雲端）
+  if(pet && pet.gistId){
+    _hasUnsyncedChanges = true;
+    refreshUnsyncedHint();
+  }
 }
 
 // === 紀錄：依寵物 + 日期 ===
@@ -1245,9 +1248,11 @@ function manualSave(){
   if(records[date]){
     toast(`✅ 已存檔 ${pet.name} ${date}`);
     showSaveStatus(`✅ 已存檔 ${date}（表單保留，可繼續補充）`);
-    // 立刻觸發雲端同步
-    if(_autoSyncTimer) clearTimeout(_autoSyncTimer);
-    autoSyncToGist();
+    // 標記未同步（手動推送設計：老師按「📤 同步給家長」才推到雲端）
+    if(pet && pet.gistId){
+      _hasUnsyncedChanges = true;
+      refreshUnsyncedHint();
+    }
     // 更新 chips（這天的紀錄狀態變了）
     renderDateHistory();
   } else {
@@ -1453,8 +1458,9 @@ const TEDDY_SYNC = {
 };
 
 function teddySyncEnabled() {
-  // DEMO 環境短路：永遠不啟用雲端同步，避免 demo 資料污染正式雲端 Gist
+  // DEMO 環境短路：禁用雲端同步
   return false;
+  return localStorage.getItem(TEDDY_SYNC.ENABLED_KEY) === '1' && !!getPat();
 }
 function setTeddySyncEnabled(on) {
   if (on) localStorage.setItem(TEDDY_SYNC.ENABLED_KEY, '1');
@@ -1681,6 +1687,8 @@ async function syncToGist(){
   toast('上傳中…');
   try{
     const url = await _doSyncToGist(pet);
+    _hasUnsyncedChanges = false;
+    refreshUnsyncedHint();
     showShareLinkResult(pet, url);
   } catch(e){
     if(String(e.message).includes('Bad credentials') || String(e.message).includes('401')){
@@ -1695,38 +1703,38 @@ async function syncToGist(){
   }
 }
 
-// === 自動背景同步 ===
-let _autoSyncTimer = null;
+// === 手動同步（給家長頁）===
+// 設計改為手動推送：每次資料變動只記未同步狀態，老師按「📤 同步給家長」才推到雲端
+// 避免家長看到改一半的草稿
+let _autoSyncTimer = null;       // 保留變數以相容舊呼叫點，但不再排程
 let _autoSyncing = false;
+let _hasUnsyncedChanges = false;
 
 function scheduleAutoSync(){
-  // 每次改動都重排定時器（debounce 15 秒）
-  if(_autoSyncTimer) clearTimeout(_autoSyncTimer);
-  _autoSyncTimer = setTimeout(autoSyncToGist, 15000);
+  // 只標記未同步狀態，不再自動推（避免家長看到未完成內容）
+  const pet = getCurrentPet();
+  if(!pet || !pet.gistId) return;   // 從未推過的寵物不顯示「未同步」（沒家長頁可比較）
+  _hasUnsyncedChanges = true;
+  refreshUnsyncedHint();
+}
+
+function refreshUnsyncedHint(){
+  const el = $('unsyncedHint');
+  if(!el) return;
+  if(_hasUnsyncedChanges){
+    el.textContent = '⚠ 有變更尚未同步給家長';
+    el.style.display = '';
+    el.style.color = '#c08000';
+  } else {
+    el.textContent = '';
+    el.style.display = 'none';
+  }
 }
 
 async function autoSyncToGist(){
-  if(_autoSyncing) return;
-  const pet = getCurrentPet();
-  if(!pet) return;
-  // 條件：必須有 PAT + 寵物已經做過第一次上傳（有 gistId）
-  if(!getPat() || !pet.gistId) return;
-  _autoSyncing = true;
-  showSaveStatus('🔄 同步客戶連結中…');
-  try{
-    await _doSyncToGist(pet);
-    showSaveStatus(`✅ 已同步 ${new Date().toLocaleTimeString('zh-TW',{hour12:false,hour:'2-digit',minute:'2-digit'})}`);
-  } catch(e){
-    if(String(e.message).includes('Bad credentials')){
-      showSaveStatus('⚠️ Token 失效，請重新上傳', '#c08000');
-    } else {
-      showSaveStatus('⚠️ 同步失敗，自動重試中', '#c08000');
-      // 60 秒後重試一次
-      setTimeout(()=>{ _autoSyncing = false; scheduleAutoSync(); }, 60000);
-      return;
-    }
-  }
-  _autoSyncing = false;
+  // 此函數保留以相容呼叫點，但實際上不再自動推
+  // 真正的推送只透過 syncToGist()（按鈕觸發）
+  return;
 }
 
 async function fetchGist(gistId){
@@ -1825,24 +1833,23 @@ function copyShareUrl(){
 // === Viewer 模式（客戶看的頁面）===
 // === 設定 modal（含跨裝置同步 + PAT）===
 function openTeddySettings(){
-  // DEMO 環境簡化：顯示提示說明此為 demo 環境，不提供同步設定
-  $('petModalTitle').textContent = '⚙ 設定 (Demo)';
+  // DEMO 環境簡化：顯示說明訊息，不暴露 PAT / Gist 設定
+  $('petModalTitle').textContent = '⚙ 設定（Demo）';
   $('petModalBody').innerHTML = `
-    <div style="padding:20px; text-align:center; line-height:1.8;">
-      <div style="font-size:48px; margin-bottom:12px;">⚠️</div>
-      <h3 style="margin:0 0 12px; color:var(--accent)">Demo 環境</h3>
-      <p style="color:var(--muted); font-size:14px; margin:0 0 16px;">
-        此為展示用 Demo 環境，所有資料僅儲存於本機 localStorage（已使用 <code>teddy_demo_</code> 前綴隔離），不提供雲端同步功能。
+    <div style="padding:12px 0;">
+      <p style="font-size:14px; line-height:1.7; color:var(--text);">
+        這是 <b>Demo 展示版本</b>，雲端同步、PAT、上傳連結等功能皆已停用，避免外部資料被寫入。
       </p>
-      <p style="color:var(--muted); font-size:13px; margin:0;">
-        如需正式使用，請至正式環境設定。
+      <p style="font-size:13px; line-height:1.7; color:var(--muted); margin-top:10px;">
+        想體驗完整版？請聯絡 Wendy 取得正式環境。
       </p>
     </div>
   `;
-  $('petModalFooter').innerHTML = `<button class="btn" onclick="closePetModal()">關閉</button>`;
-  $('petModal').classList.add('show');
+  $('petModalActions').innerHTML = `
+    <button type="button" onclick="closePetManager()">關閉</button>
+  `;
+  $('petModal').style.display = 'flex';
   return;
-  // 以下保留原本 code（不會執行）
   const pat = getPat();
   const enabled = teddySyncEnabled();
   const hasGistId = !!localStorage.getItem(TEDDY_SYNC.GIST_ID_KEY);
@@ -2127,7 +2134,10 @@ function gotoDiary(petId){
   if(petId){
     setCurrentPet(petId);
   }
+  // 切到新寵物 → reset 未同步狀態（新寵物還沒改過任何資料）
+  _hasUnsyncedChanges = false;
   applyView('diary');
+  refreshUnsyncedHint();
 }
 // Filter state (module-level)
 let _petListSpeciesFilter = '';   // '' / '貓' / '狗' / '其他'
