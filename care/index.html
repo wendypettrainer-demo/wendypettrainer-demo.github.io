@@ -1368,7 +1368,8 @@ const TEDDY_SYNC = {
 };
 
 function teddySyncEnabled() {
-  return localStorage.getItem(TEDDY_SYNC.ENABLED_KEY) === '1' && !!getPat();
+  // DEMO 環境短路：永遠不啟用雲端同步，避免 demo 資料污染正式雲端 Gist
+  return false;
 }
 function setTeddySyncEnabled(on) {
   if (on) localStorage.setItem(TEDDY_SYNC.ENABLED_KEY, '1');
@@ -1739,6 +1740,25 @@ function copyShareUrl(){
 // === Viewer 模式（客戶看的頁面）===
 // === 設定 modal（含跨裝置同步 + PAT）===
 function openTeddySettings(){
+  // DEMO 環境簡化：只顯示資料備份，隱藏同步與 PAT 設定
+  $('petModalTitle').textContent = '⚙ 設定（Demo）';
+  $('petModalBody').innerHTML = `
+    <div style="background:#fff7e6; border:1px solid #f0d878; border-radius:6px; padding:12px 14px; margin-bottom:16px; font-size:13px; line-height:1.7">
+      <b>⚠ Demo 環境</b><br>
+      雲端同步、GitHub PAT、跨裝置同步在 Demo 環境停用，避免影響正式版資料。
+    </div>
+    <div>
+      <h3 style="margin:0 0 10px; font-size:15px; color:var(--accent)">💾 資料備份</h3>
+      <button type="button" class="secondary" onclick="exportTeddyBackup()" style="width:100%">⬇ 匯出 Demo 資料 (JSON)</button>
+      <p style="font-size:12px; color:var(--muted); margin:8px 0 0; line-height:1.6">
+        備份 Demo 環境的本機資料。Demo 與正式版資料完全隔離。
+      </p>
+    </div>
+  `;
+  $('petModalActions').innerHTML = '<button type="button" class="secondary" onclick="closePetManager()">關閉</button>';
+  $('petModal').style.display = 'flex';
+  return;
+  // 以下為正式版邏輯（demo 已 short-circuit）
   const pat = getPat();
   const enabled = teddySyncEnabled();
   const hasGistId = !!localStorage.getItem(TEDDY_SYNC.GIST_ID_KEY);
