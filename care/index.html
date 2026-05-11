@@ -187,27 +187,29 @@
     flex:0 0 auto; padding:6px 10px; font-size:13px; font-weight:600;
     background:var(--header-bg); color:var(--accent); border-radius:6px;
   }
-  /* FAB（右下角 + 按鈕，跟訓練 app 一致） */
-  .fab {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: var(--accent);
-    color: white;
-    border: none;
-    font-size: 24px;
-    line-height: 1;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.18);
-    z-index: 100;
-    font-family: inherit;
-    transition: transform 0.15s, box-shadow 0.15s;
+  /* List 上方 toolbar（新增寵物按鈕） */
+  .list-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
   }
-  .fab:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,0.22); }
-  .fab:active { transform: scale(0.96); }
+  .list-toolbar .add-btn {
+    padding: 6px 14px;
+    background: var(--accent);
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+  .list-toolbar .add-btn:hover { background: #8b4d22; }
+  .list-toolbar .add-btn:active { transform: translateY(1px); }
   .brand{
     text-align:right; font-weight:800; font-size:20px; color:var(--accent);
     line-height:1.1;
@@ -608,25 +610,25 @@
     .two-col > div:first-child{border-right:none; border-bottom:1px solid var(--border);}
     .row > .lbl{flex:0 0 48px; font-size:13px;}
   }
-      .demo-banner {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        background: #8b4d22 !important;
-        color: #fff7eb !important;
-        text-align: center !important;
-        padding: 7px 16px !important;
-        font-size: 13px !important;
-        font-weight: 600 !important;
-        letter-spacing: 1.5px !important;
-        z-index: 99999 !important;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.15) !important;
-        box-sizing: border-box !important;
-        font-family: 'Inter', 'Noto Sans TC', -apple-system, sans-serif !important;
-      }
-      body { padding-top: 36px !important; }
-      .top-nav { top: 36px !important; }
+  .demo-banner {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    background: #8b4d22 !important;
+    color: #fff7eb !important;
+    text-align: center !important;
+    padding: 7px 16px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    letter-spacing: 1.5px !important;
+    z-index: 99999 !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15) !important;
+    box-sizing: border-box !important;
+    font-family: 'Inter', 'Noto Sans TC', -apple-system, sans-serif !important;
+  }
+  body { padding-top: 36px !important; }
+  .top-nav { top: 36px !important; }
 </style>
 </head>
 <body>
@@ -645,8 +647,10 @@
 
 <!-- 第二層：寵物列表 view (預設) -->
 <div class="container" id="petListView">
+  <div class="list-toolbar">
+    <button type="button" class="add-btn" onclick="quickAddPet()">+ 新增寵物</button>
+  </div>
   <div class="pet-list" id="petList"></div>
-  <button type="button" class="fab" id="addPetFab" onclick="quickAddPet()" title="新增寵物">＋</button>
 </div>
 
 <!-- 第三層：寵物詳情 / 日記 view -->
@@ -1398,9 +1402,9 @@ const TEDDY_SYNC = {
 };
 
 function teddySyncEnabled() {
-  // DEMO 環境短路：永遠不啟用雲端同步，避免 demo 資料污染正式雲端 Gist
-  return false;
-}
+        // DEMO 環境短路：永遠不啟用雲端同步，避免 demo 資料污染正式雲端 Gist
+        return false;
+      }
 function setTeddySyncEnabled(on) {
   if (on) localStorage.setItem(TEDDY_SYNC.ENABLED_KEY, '1');
   else localStorage.removeItem(TEDDY_SYNC.ENABLED_KEY);
@@ -1770,26 +1774,26 @@ function copyShareUrl(){
 // === Viewer 模式（客戶看的頁面）===
 // === 設定 modal（含跨裝置同步 + PAT）===
 function openTeddySettings(){
-  // DEMO 環境簡化：只顯示資料備份，隱藏同步與 PAT 設定
-  $('petModalTitle').textContent = '⚙ 設定（Demo）';
-  $('petModalBody').innerHTML = `
-    <div style="background:#fff7e6; border:1px solid #f0d878; border-radius:6px; padding:12px 14px; margin-bottom:16px; font-size:13px; line-height:1.7">
-      <b>⚠ Demo 環境</b><br>
-      雲端同步、GitHub PAT、跨裝置同步在 Demo 環境停用，避免影響正式版資料。
-    </div>
-    <div>
-      <h3 style="margin:0 0 10px; font-size:15px; color:var(--accent)">💾 資料備份</h3>
-      <button type="button" class="secondary" onclick="exportTeddyBackup()" style="width:100%">⬇ 匯出 Demo 資料 (JSON)</button>
-      <p style="font-size:12px; color:var(--muted); margin:8px 0 0; line-height:1.6">
-        備份 Demo 環境的本機資料。Demo 與正式版資料完全隔離。
-      </p>
-    </div>
-  `;
-  $('petModalActions').innerHTML = '<button type="button" class="secondary" onclick="closePetManager()">關閉</button>';
-  $('petModal').style.display = 'flex';
-  return;
-  // 以下為正式版邏輯（demo 已 short-circuit）
-  const pat = getPat();
+        // DEMO 環境簡化：只顯示資料備份，隱藏同步與 PAT 設定
+        $('petModalTitle').textContent = '⚙ 設定（Demo）';
+        $('petModalBody').innerHTML = `
+          <div style="background:#fff7e6; border:1px solid #f0d878; border-radius:6px; padding:12px 14px; margin-bottom:16px; font-size:13px; line-height:1.7">
+            <b>⚠ Demo 環境</b><br>
+            雲端同步、GitHub PAT、跨裝置同步在 Demo 環境停用，避免影響正式版資料。
+          </div>
+          <div>
+            <h3 style="margin:0 0 10px; font-size:15px; color:var(--accent)">💾 資料備份</h3>
+            <button type="button" class="secondary" onclick="exportTeddyBackup()" style="width:100%">⬇ 匯出 Demo 資料 (JSON)</button>
+            <p style="font-size:12px; color:var(--muted); margin:8px 0 0; line-height:1.6">
+              備份 Demo 環境的本機資料。Demo 與正式版資料完全隔離。
+            </p>
+          </div>
+        `;
+        $('petModalActions').innerHTML = '<button type="button" class="secondary" onclick="closePetManager()">關閉</button>';
+        $('petModal').style.display = 'flex';
+        return;
+        // 以下為正式版邏輯（demo 已 short-circuit）
+        const pat = getPat();
   const enabled = teddySyncEnabled();
   const hasGistId = !!localStorage.getItem(TEDDY_SYNC.GIST_ID_KEY);
   const lastTime = localStorage.getItem(TEDDY_SYNC.LAST_TIME_KEY);
