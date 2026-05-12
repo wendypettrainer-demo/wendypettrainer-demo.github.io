@@ -674,8 +674,7 @@
 
 /* DEMO BANNER */
 .demo-banner{position:fixed;top:0;left:0;right:0;height:36px;background:#ff6b6b;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;z-index:99999;letter-spacing:0.5px;box-shadow:0 2px 6px rgba(0,0,0,0.15);}
-body{padding-top:36px;}
-.top-nav{top:36px !important;}
+.app,body{padding-top:36px;}
 </style>
 </head>
 <body>
@@ -1015,7 +1014,7 @@ function exportTeddyBackup(){
   const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const today = new Date().toISOString().slice(0, 10);
+  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
   a.href = url;
   a.download = `teddy-care-backup-${today}.json`;
   document.body.appendChild(a);
@@ -1264,7 +1263,7 @@ function renderDateHistory(){
   if(!el) return;
   const records = getRecords();
   const dates = Object.keys(records).sort().reverse();
-  const today = new Date().toISOString().slice(0,10);
+  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
   const currentDate = $('date').value;
   // 快取：避免每次按鍵都重繪（會打斷 chips 的水平捲動位置）
   const key = JSON.stringify([dates, currentDate, today]);
@@ -1844,6 +1843,7 @@ function openTeddySettings(){
   `;
   $('petModal').style.display = 'flex';
 }
+
 function saveTeddySettings(){
   const newPat = $('ts_pat').value.trim();
   setPat(newPat);
@@ -1998,7 +1998,7 @@ function exportPetCsv(){
   const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const today = new Date().toISOString().slice(0,10);
+  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
   // 檔名：寵物名_照護紀錄_匯出日期.csv
   a.href = url;
   a.download = `${pet.name}_照護紀錄_${today}.csv`;
@@ -2596,7 +2596,7 @@ body{background:var(--bg);}
   const blob = new Blob([html], {type:'text/html'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const today = new Date().toISOString().slice(0,10);
+  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
   a.href = url;
   a.download = `${petName}_照護紀錄_${today}.html`;
   document.body.appendChild(a);
