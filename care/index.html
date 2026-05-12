@@ -673,20 +673,13 @@
   }
 
 /* DEMO BANNER */
-.demo-banner {
-  position: fixed; top: 0; left: 0; right: 0;
-  height: 36px; line-height: 36px;
-  background: #ff5722; color: #fff;
-  text-align: center; font-size: 14px; font-weight: 600;
-  z-index: 99999; letter-spacing: 0.5px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-}
-body { padding-top: 36px !important; }
-.top-nav { top: 36px !important; }
+.demo-banner{position:fixed;top:0;left:0;right:0;height:36px;background:#ff6b6b;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;z-index:99999;letter-spacing:0.5px;box-shadow:0 2px 6px rgba(0,0,0,0.15);}
+body{padding-top:36px;}
+.top-nav{top:36px !important;}
 </style>
 </head>
 <body>
-<div class="demo-banner">⚠ Demo 環境 — 照護日記資料僅供展示</div>
+<div class="demo-banner">DEMO 環境・資料獨立於正式版・僅供試用</div>
 
 <header class="top-nav" id="topNav">
   <a class="brand-logo" id="brandLogoNav" title="回品牌首頁"><img src="logo.png" alt="Wendy" onerror="this.style.display='none'"></a>
@@ -1458,9 +1451,8 @@ const TEDDY_SYNC = {
 };
 
 function teddySyncEnabled() {
-  // DEMO 環境短路：禁用雲端同步
+  // DEMO 環境短路：永不啟用雲端同步
   return false;
-  return localStorage.getItem(TEDDY_SYNC.ENABLED_KEY) === '1' && !!getPat();
 }
 function setTeddySyncEnabled(on) {
   if (on) localStorage.setItem(TEDDY_SYNC.ENABLED_KEY, '1');
@@ -1833,77 +1825,25 @@ function copyShareUrl(){
 // === Viewer 模式（客戶看的頁面）===
 // === 設定 modal（含跨裝置同步 + PAT）===
 function openTeddySettings(){
-  // DEMO 環境簡化：顯示說明訊息，不暴露 PAT / Gist 設定
-  $('petModalTitle').textContent = '⚙ 設定（Demo）';
+  // DEMO 環境簡化：不顯示同步/PAT 設定
+  $('petModalTitle').textContent = '⚙ 設定';
   $('petModalBody').innerHTML = `
     <div style="padding:12px 0;">
       <p style="font-size:14px; line-height:1.7; color:var(--text);">
-        這是 <b>Demo 展示版本</b>，雲端同步、PAT、上傳連結等功能皆已停用，避免外部資料被寫入。
+        這是 <b style="color:#ff6b6b;">DEMO 環境</b>，雲端同步功能已停用。<br>
+        所有資料只存在你目前這個瀏覽器，獨立於正式版。
       </p>
-      <p style="font-size:13px; line-height:1.7; color:var(--muted); margin-top:10px;">
-        想體驗完整版？請聯絡 Wendy 取得正式環境。
-      </p>
+      <div style="margin-top:16px;">
+        <h3 style="margin:0 0 10px; font-size:15px; color:var(--accent)">💾 資料備份</h3>
+        <button type="button" class="secondary" onclick="exportTeddyBackup()" style="width:100%">⬇ 匯出全部資料 (JSON)</button>
+      </div>
     </div>
   `;
   $('petModalActions').innerHTML = `
     <button type="button" onclick="closePetManager()">關閉</button>
   `;
   $('petModal').style.display = 'flex';
-  return;
-  const pat = getPat();
-  const enabled = teddySyncEnabled();
-  const hasGistId = !!localStorage.getItem(TEDDY_SYNC.GIST_ID_KEY);
-  const lastTime = localStorage.getItem(TEDDY_SYNC.LAST_TIME_KEY);
-  const lastTimeText = lastTime ? new Date(lastTime).toLocaleString('zh-TW') : '從未同步';
-  const statusText = !enabled ? '未啟用'
-    : TEDDY_SYNC.status === 'ok' ? '✅ 已同步'
-    : TEDDY_SYNC.status === 'syncing' ? '🔄 同步中⋯'
-    : TEDDY_SYNC.status === 'pending' ? '⏳ 即將上傳'
-    : TEDDY_SYNC.status === 'error' ? '❌ ' + TEDDY_SYNC.lastError
-    : '⏳ 等待中';
-
-  $('petModalTitle').textContent = '⚙ 設定';
-  $('petModalBody').innerHTML = `
-    <div style="margin-bottom:18px">
-      <h3 style="margin:0 0 10px; font-size:15px; color:var(--accent)">☁️ 跨裝置同步</h3>
-      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:8px 0;">
-        <input type="checkbox" id="ts_enabled" ${enabled?'checked':''} style="width:18px; height:18px; accent-color:var(--accent);">
-        <span><b>開啟雲端同步</b>（讓 iPhone / iPad / Mac 共用同一份資料）</span>
-      </label>
-      <p style="font-size:13px; color:var(--muted); margin:8px 0 0; line-height:1.6;">
-        狀態：<b>${statusText}</b><br>
-        最後同步：${lastTimeText}<br>
-        ${hasGistId ? '雲端 Gist ID：<code style="font-size:11px">' + (localStorage.getItem(TEDDY_SYNC.GIST_ID_KEY)||'') + '</code>' : ''}
-      </p>
-      <div style="display:flex; gap:8px; margin-top:10px;">
-        <button type="button" class="secondary" onclick="teddyForcePullClicked()" style="flex:1">⬇ 從雲端拉取</button>
-        <button type="button" class="secondary" onclick="teddyForcePushClicked()" style="flex:1">⬆ 推上雲端</button>
-      </div>
-      <p style="font-size:12px; color:var(--muted); margin:10px 0 0; line-height:1.6;">
-        💡 每次本機改動 3 秒後自動推到你的私人 Gist，其他裝置打開 App 時自動拉。<br>
-        💡 衝突規則：「最後存者為準」。請避免兩台同時編輯。
-      </p>
-    </div>
-    <div style="margin-bottom:18px">
-      <h3 style="margin:0 0 10px; font-size:15px; color:var(--accent)">GitHub Personal Access Token</h3>
-      <input type="password" id="ts_pat" value="${(pat||'').replace(/"/g,'&quot;')}" placeholder="ghp_..." style="width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:6px; font-family:inherit;">
-      <p style="font-size:12px; color:var(--muted); margin:8px 0 0;">需要 gist 權限。同步與「上傳客戶連結」共用此 token。</p>
-    </div>
-    <div>
-      <h3 style="margin:0 0 10px; font-size:15px; color:var(--accent)">💾 資料備份</h3>
-      <button type="button" class="secondary" onclick="exportTeddyBackup()" style="width:100%">⬇ 匯出全部資料 (JSON)</button>
-      <p style="font-size:12px; color:var(--muted); margin:8px 0 0; line-height:1.6;">
-        💡 把所有寵物 + 日記打包成一個 JSON 檔下載。建議每月手動備份一次到 iCloud / Dropbox，作為 gist 之外的第二層保險。
-      </p>
-    </div>
-  `;
-  $('petModalActions').innerHTML = `
-    <button type="button" class="secondary" onclick="closePetManager()">取消</button>
-    <button type="button" onclick="saveTeddySettings()">儲存</button>
-  `;
-  $('petModal').style.display = 'flex';
 }
-
 function saveTeddySettings(){
   const newPat = $('ts_pat').value.trim();
   setPat(newPat);
@@ -2083,8 +2023,8 @@ function quickAddPet(){
 // === 寵物欄位顯示工具 ===
 function genderLabel(p){
   if(!p || !p.gender) return '';
-  if(p.gender === 'female') return '♀ 母';
-  if(p.gender === 'male') return '♂ 公';
+  if(p.gender === 'female') return '母';
+  if(p.gender === 'male') return '公';
   return '';
 }
 function neuteredLabel(p){
@@ -2315,8 +2255,8 @@ function showPetForm(petId){
         <label class="chip"><input type="radio" name="petFormSpecies" value="其他" ${editing?.species==='其他'?'checked':''}> 🐾 其他</label>
       </div></div>
       <div class="row"><div class="lbl">性別</div><div class="field chips">
-        <label class="chip"><input type="radio" name="petFormGender" value="female" ${editing?.gender==='female'?'checked':''}> ♀ 母</label>
-        <label class="chip"><input type="radio" name="petFormGender" value="male" ${editing?.gender==='male'?'checked':''}> ♂ 公</label>
+        <label class="chip"><input type="radio" name="petFormGender" value="female" ${editing?.gender==='female'?'checked':''}> 母</label>
+        <label class="chip"><input type="radio" name="petFormGender" value="male" ${editing?.gender==='male'?'checked':''}> 公</label>
         <label class="chip"><input type="radio" name="petFormGender" value="unknown" ${editing?.gender==='unknown'?'checked':''}> 未知</label>
       </div></div>
       <div class="row"><div class="lbl">絕育</div><div class="field chips">

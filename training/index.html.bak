@@ -986,14 +986,9 @@
   @supports (padding: env(safe-area-inset-bottom)) {
     .app { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
   }
-
-.demo-banner{position:fixed;top:0;left:0;right:0;height:36px;background:#ff6b35;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;z-index:99999;box-shadow:0 2px 4px rgba(0,0,0,0.2);}
-.app, body { padding-top: 36px; }
 </style>
 </head>
 <body>
-<div class="demo-banner">DEMO 環境 - 此為展示版本，資料不會儲存</div>
-
 <div class="app">
   <header class="top">
     <a class="brand-logo" id="brandLogo" title="回品牌首頁"><img src="logo.png" alt="Wendy" onerror="this.style.display='none'"></a>
@@ -1028,33 +1023,33 @@ let LOGO_DATA = null, LOGO_W = 0, LOGO_H = 0;
 
 /* ============== STATE & STORAGE ============== */
 const KEYS = {
-  pets: 'petcaredemo.pets',
-  sessions: 'petcaredemo.sessions',
-  itemsCat: 'petcaredemo.trainingItems.cat',
-  itemsDog: 'petcaredemo.trainingItems.dog',
-  bookings: 'petcaredemo.bookings',                  // 預約 / 課程預約記錄（合約 / 應收）
-  bookingTemplate: 'petcaredemo.bookingTemplate',    // 帳戶 + 須知 + 預設值
-  payments: 'petcaredemo.payments',                  // 實際金流：收款 / 退費（per booking）
-  studioPayments: 'petcaredemo.studioPayments',      // 教室月結款（per studio + month）
-  materials: 'petcaredemo.materials',                // 教材庫（給家長 PDF 附錄用）
-  lineTemplate: 'petcaredemo.lineTemplate',           // LINE 上課提醒訊息模板
-  settings: 'petcaredemo.settings',
-  version: 'petcaredemo.version',
-  lastModified: 'petcaredemo.lastModified',  // 雲端同步用
+  pets: 'petcare.pets',
+  sessions: 'petcare.sessions',
+  itemsCat: 'petcare.trainingItems.cat',
+  itemsDog: 'petcare.trainingItems.dog',
+  bookings: 'petcare.bookings',                  // 預約 / 課程預約記錄（合約 / 應收）
+  bookingTemplate: 'petcare.bookingTemplate',    // 帳戶 + 須知 + 預設值
+  payments: 'petcare.payments',                  // 實際金流：收款 / 退費（per booking）
+  studioPayments: 'petcare.studioPayments',      // 教室月結款（per studio + month）
+  materials: 'petcare.materials',                // 教材庫（給家長 PDF 附錄用）
+  lineTemplate: 'petcare.lineTemplate',           // LINE 上課提醒訊息模板
+  settings: 'petcare.settings',
+  version: 'petcare.version',
+  lastModified: 'petcare.lastModified',  // 雲端同步用
 };
 
 // 哪些 key 會被同步到雲端（settings 不同步：含 PAT、device-specific）
 const SYNCABLE_KEYS = new Set([
-  'petcaredemo.pets',
-  'petcaredemo.sessions',
-  'petcaredemo.trainingItems.cat',
-  'petcaredemo.trainingItems.dog',
-  'petcaredemo.bookings',
-  'petcaredemo.bookingTemplate',
-  'petcaredemo.payments',
-  'petcaredemo.studioPayments',
-  'petcaredemo.materials',
-  'petcaredemo.lineTemplate',
+  'petcare.pets',
+  'petcare.sessions',
+  'petcare.trainingItems.cat',
+  'petcare.trainingItems.dog',
+  'petcare.bookings',
+  'petcare.bookingTemplate',
+  'petcare.payments',
+  'petcare.studioPayments',
+  'petcare.materials',
+  'petcare.lineTemplate',
 ]);
 
 // LINE 上課提醒訊息預設模板。可用變數：{petName} {date} {time} {seq} {courseLabel}
@@ -2701,7 +2696,7 @@ function renderSessions() {
     // 標題：有 date 顯示日期；date 空（已被 status badge 「待安排」表達，標題只顯示堂數）
     let titleHtml;
     if (s.date) {
-      titleHtml = `${fmtDate(s.date)} ${isToday && !isDone && !isClosed ? '<span class="badge" style="background:#5a7d5f; color:#ffffff; border-color:#5a7d5f">今天</span>' : ''}`;
+      titleHtml = `${fmtDate(s.date)} ${isToday && !isDone && !isClosed ? '<span class="badge" style="background:var(--good)">今天</span>' : ''}`;
     } else {
       const seq = (s.sessionSeq || '?').toString();
       titleHtml = `<span style="color:var(--text-soft); font-weight:500">第 ${escapeHtml(seq)} 堂</span>`;
@@ -5396,18 +5391,6 @@ function exportPdf(sess, pet) {
     padding: 10pt 12pt;
     margin-bottom: 8pt;
     page-break-inside: avoid;
-  }
-  /* 非最後一個 item 後面加「繼續下頁」提示，讓家長知道下面還有內容 */
-  .item:not(:last-of-type)::after {
-    content: '— 繼續下頁 ↓ —';
-    display: block;
-    text-align: center;
-    margin-top: 10pt;
-    padding-top: 8pt;
-    border-top: 1px dashed #c9b693;
-    font-size: 9pt;
-    color: #b8ad9a;
-    letter-spacing: 3px;
   }
   .item-row {
     display: flex; justify-content: space-between;
