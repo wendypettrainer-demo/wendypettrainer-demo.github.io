@@ -6230,13 +6230,6 @@ async function shareToGist(sess, pet) {
     },
     session: {
       date: sess.date, location: sess.location, duration: sess.duration,
-      // 課程類型 + 堂數（給 report.html 顯示「📋 一對一 · 第 1 堂」之類的標籤）
-      courseType: sess.courseType || '',
-      sessionSeq: sess.sessionSeq || '',
-      sessionTotal: sess.sessionTotal || '',
-      groupSubType: sess.groupSubType || '',
-      groupSubTypeOther: sess.groupSubTypeOther || '',
-      courseTypeOther: sess.courseTypeOther || '',
       records: enrichedRecords, homework: sess.homework,
     },
     brand: 'Wendy 溫蒂．貓與狗訓練日常',
